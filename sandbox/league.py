@@ -1,17 +1,31 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 import sys
 import numpy as np
-import random
+from sklearn import tree
 
-class MyLeagueClassifer():
+# Contains the available data for one match when testing a classifier.
+# Each team (Won / Lost) has 5 players and for each player we can get championId and summonerId
+class Match():
+  def __init__(self, matchId, matchDuration, queueType, mapId):
+    # Map data
+    self.matchId = matchId
+    self.matchDuration = matchDuration
+    self.queueType = queueType
+    self.mapId = mapId
 
-  def __init__(self):
-    pass
+    # Player data - each list is of size 5
+    self.WonSummonerIds = []
+    self.WonChampionIds = []
+    self.LostSummonerIds = []
+    self.LostChampionIds = []
 
-  def fit(self):
-    pass
+  def __str__(self):
+    s = 'Match ' + str(self.matchId) + ' lasted for '
+    s += str(int(self.matchDuration / 60)) + 'm ' + str(int(self.matchDuration % 60)) + 's\n'
+    s += 'Winning team summoner ids: ' + str(self.WonSummonerIds) + '.\n'
+    s += 'Losing team summoner ids: ' + str(self.LostSummonerIds)
+    return s
 
 # Contains data player data for a single game
 class Player():
@@ -58,8 +72,16 @@ class Player():
     self.summonerId = summonerId
     self.matchHistoryUrl = matchHistoryUrl
 
-if __name__ == '__main__':
-  print "start"
+  def __str__(self):
+    s = 'Summoner ' + str(self.summonerId)
+    s += ' played champion ' + str(self.championId)
+    s += ' with a score of ' + str(self.kills) + '/' + str(self.deaths) + '/' + str(self.assists)
+    return s
+
+
+# Puts the data from test.csv into the players list and matches list
+def getDataFromCSV(players, matches):
+  print 'Reading data from test.csv'
 
   # mydata = np.recfromcsv('test.csv', delimiter=',');
   mydata = np.recfromcsv('test.csv', delimiter=',', filling_values=np.nan, case_sensitive=True,
@@ -82,10 +104,10 @@ if __name__ == '__main__':
   sumid = 'summonerId'
   url = 'matchHistoryUri'
 
-  players = []
-
-  # Add all player data to players list
   for oneGame in mydata:
+    m = Match(oneGame['matchId'], oneGame['matchDuration'], oneGame['queueType'], oneGame['mapId'])
+
+    # Add all player data to players list (training data)
     for i in range(1, 11):
       players.append(Player(oneGame[pid + str(i)], oneGame[cid + str(i)], oneGame[sid1 + str(i)],
                             oneGame[sid2 + str(i)], oneGame[rank + str(i)], oneGame[win + str(i)],
@@ -94,5 +116,30 @@ if __name__ == '__main__':
                             oneGame[wk + str(i)], oneGame[ik + str(i)], oneGame[tk + str(i)],
                             oneGame[sumid + str(i)], oneGame[url + str(i)]))
 
-  c1 = MyLeagueClassifer()
-  c1.fit()
+
+      if (oneGame[win + str(i)] == True):
+        m.WonChampionIds.append(oneGame[cid + str(i)])
+        m.WonSummonerIds.append(oneGame[sumid + str(i)])
+      else:
+        m.LostChampionIds.append(oneGame[cid + str(i)])
+        m.LostSummonerIds.append(oneGame[sumid + str(i)])
+
+    matches.append(m)
+
+def TestDecisionTreeClassifer():
+  pass
+
+if __name__ == '__main__':
+  players = []  # Contains list of Player classes from csv
+  matches = []  # Contains list of Match classes from csv
+  getDataFromCSV(players, matches)
+
+  print 'Printing 4 players'
+  for i in range (0, 4):
+    print players[i]
+
+  print 'Printing 2 matches'
+  for i in range (0, 2):
+    print matches[i]
+
+  TestDecisionTreeClassifer()
