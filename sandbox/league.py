@@ -5,7 +5,7 @@ import numpy as np
 from sklearn import tree
 
 # Contains the available data for one match when testing a classifier.
-# Each team (Won / Lost) has 5 players and for each player we can get championId and summonerId
+# Each team (Won / Lost) has 5 players
 class Match():
   def __init__(self, matchId, matchDuration, queueType, mapId):
     # Map data
@@ -14,17 +14,13 @@ class Match():
     self.queueType = queueType
     self.mapId = mapId
 
-    # Player data - each list is of size 5
-    self.WonSummonerIds = []
-    self.WonChampionIds = []
-    self.LostSummonerIds = []
-    self.LostChampionIds = []
+    # Player data - each list contains 5 Player classes
+    self.team1 = []
+    self.team2 = []
 
   def __str__(self):
     s = 'Match ' + str(self.matchId) + ' lasted for '
-    s += str(int(self.matchDuration / 60)) + 'm ' + str(int(self.matchDuration % 60)) + 's\n'
-    s += 'Winning team summoner ids: ' + str(self.WonSummonerIds) + '.\n'
-    s += 'Losing team summoner ids: ' + str(self.LostSummonerIds)
+    s += str(int(self.matchDuration / 60)) + 'm ' + str(int(self.matchDuration % 60)) + 's'
     return s
 
 # Contains data player data for a single game
@@ -72,6 +68,10 @@ class Player():
     self.summonerId = summonerId
     self.matchHistoryUrl = matchHistoryUrl
 
+  @classmethod
+  def tmpConstructor(self, kills, deaths, assists):
+    return Player(0,0,0,0,'UNRANKED',0,kills, deaths, assists, 0,0,0,0,0,0,0)
+
   def __str__(self):
     s = 'Summoner ' + str(self.summonerId)
     s += ' played champion ' + str(self.championId)
@@ -109,25 +109,80 @@ def getDataFromCSV(players, matches):
 
     # Add all player data to players list (training data)
     for i in range(1, 11):
-      players.append(Player(oneGame[pid + str(i)], oneGame[cid + str(i)], oneGame[sid1 + str(i)],
-                            oneGame[sid2 + str(i)], oneGame[rank + str(i)], oneGame[win + str(i)],
-                            oneGame[kills + str(i)], oneGame[deaths + str(i)],
-                            oneGame[assists + str(i)], oneGame[dmg + str(i)], oneGame[wp + str(i)],
-                            oneGame[wk + str(i)], oneGame[ik + str(i)], oneGame[tk + str(i)],
-                            oneGame[sumid + str(i)], oneGame[url + str(i)]))
+      p = Player(oneGame[pid + str(i)], oneGame[cid + str(i)], oneGame[sid1 + str(i)],
+                 oneGame[sid2 + str(i)], oneGame[rank + str(i)], oneGame[win + str(i)],
+                 oneGame[kills + str(i)], oneGame[deaths + str(i)],
+                 oneGame[assists + str(i)], oneGame[dmg + str(i)], oneGame[wp + str(i)],
+                 oneGame[wk + str(i)], oneGame[ik + str(i)], oneGame[tk + str(i)],
+                 oneGame[sumid + str(i)], oneGame[url + str(i)])
 
+      players.append(p)
 
-      if (oneGame[win + str(i)] == True):
-        m.WonChampionIds.append(oneGame[cid + str(i)])
-        m.WonSummonerIds.append(oneGame[sumid + str(i)])
+      if (p.winner):
+        m.team1.append(p)
       else:
-        m.LostChampionIds.append(oneGame[cid + str(i)])
-        m.LostSummonerIds.append(oneGame[sumid + str(i)])
+        m.team2.append(p)
 
     matches.append(m)
 
-def TestDecisionTreeClassifer():
-  pass
+# Add training data
+def addDataToClf(data, result, players):
+  for p in players:
+    data.append((p.kills, p.deaths, p.assists))
+    result.append((p.winner))
+
+# Splits list l into n size lists
+def splitList(l, n):
+  return [l[x : x + n] for x in xrange(0, len(l), n)]
+
+# Uses random forests (5 simple decision trees - 1 for each player)
+def DecisionTreeClassifer1(players, matches):
+  data = []     # Contains data we are making decisions on
+  result = []   # True if team won and false if team lost
+
+  matches = splitList(matches, 200) # split matches into lists of size 200
+
+  # Currently only uses first 200 matches as training data
+  for m in matches[0]:
+    addDataToClf(data, result, m.team1)
+    addDataToClf(data, result, m.team2)
+
+  clf = tree.DecisionTreeClassifier()
+  clf = clf.fit(data, result)
+
+  testCases = []
+
+  # Example winning case
+  m1 = Match(0, 0, 'RANKED_SOLO_5x5', 11)
+  m1.team1.append(Player.tmpConstructor(3, 2, 8))    # e.g. k/d/a of 3/2/8
+  m1.team1.append(Player.tmpConstructor(4, 2, 18))
+  m1.team1.append(Player.tmpConstructor(3, 1, 10))
+  m1.team1.append(Player.tmpConstructor(14, 2, 6))
+  m1.team1.append(Player.tmpConstructor(4, 5, 4))
+  testCases.append(m1)
+
+  # Example losing case
+  m2 = Match(0, 0, 'RANKED_SOLO_5x5', 11)
+  m2.team1.append(Player.tmpConstructor(3, 11, 14))
+  m2.team1.append(Player.tmpConstructor(7, 6, 8))
+  m2.team1.append(Player.tmpConstructor(4, 10, 11))
+  m2.team1.append(Player.tmpConstructor(5, 15, 5))
+  m2.team1.append(Player.tmpConstructor(7, 14, 4))
+  testCases.append(m2)
+
+  for t in testCases:
+    countWins = 0
+    for p in t.team1:
+      onePrediction = clf.predict([[p.kills,p.deaths,p.assists]])
+      print p.kills, p.deaths, p.assists, ' - ', onePrediction[0]
+      if(onePrediction[0]):
+        countWins += 1
+
+    # If more than 2 of the decision trees predict win
+    if (countWins > 2):
+      print 'Predict win'
+    else:
+      print 'Predict lose'
 
 if __name__ == '__main__':
   players = []  # Contains list of Player classes from csv
@@ -142,4 +197,4 @@ if __name__ == '__main__':
   for i in range (0, 2):
     print matches[i]
 
-  TestDecisionTreeClassifer()
+  DecisionTreeClassifer1(players, matches)
