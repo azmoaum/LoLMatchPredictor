@@ -150,39 +150,37 @@ def DecisionTreeClassifer1(players, matches):
   clf = tree.DecisionTreeClassifier()
   clf = clf.fit(data, result)
 
-  testCases = []
+  correct = 0
+  numCases = 0
+  for m in matches[1]:
+    teams = [m.team1, m.team2]
+    for t in teams:
+      numCases += 1
+      countWins = 0
+      for p in t:
+        onePrediction = clf.predict([[p.kills,p.deaths,p.assists]])
+        # print p.kills, p.deaths, p.assists, ' - ', onePrediction[0]
+        if(onePrediction[0]):
+          countWins += 1
 
-  # Example winning case
-  m1 = Match(0, 0, 'RANKED_SOLO_5x5', 11)
-  m1.team1.append(Player.tmpConstructor(3, 2, 8))    # e.g. k/d/a of 3/2/8
-  m1.team1.append(Player.tmpConstructor(4, 2, 18))
-  m1.team1.append(Player.tmpConstructor(3, 1, 10))
-  m1.team1.append(Player.tmpConstructor(14, 2, 6))
-  m1.team1.append(Player.tmpConstructor(4, 5, 4))
-  testCases.append(m1)
+      # If more than 2 of the decision trees predict win
+      if (countWins > 2):
+        if (t[0].winner):
+          # print 'Predict win and team won'
+          correct += 1
+        else:
+          # print 'Predict win and team lost'
+          pass
+      else:
+        if (t[0].winner):
+          # print 'Predict lose and team win'
+          pass
+        else:
+          # print 'Predict lose and team lost'
+          correct += 1
 
-  # Example losing case
-  m2 = Match(0, 0, 'RANKED_SOLO_5x5', 11)
-  m2.team1.append(Player.tmpConstructor(3, 11, 14))
-  m2.team1.append(Player.tmpConstructor(7, 6, 8))
-  m2.team1.append(Player.tmpConstructor(4, 10, 11))
-  m2.team1.append(Player.tmpConstructor(5, 15, 5))
-  m2.team1.append(Player.tmpConstructor(7, 14, 4))
-  testCases.append(m2)
+  print 'Random forest accuracy: ', (100.0 * correct / numCases), '%'
 
-  for t in testCases:
-    countWins = 0
-    for p in t.team1:
-      onePrediction = clf.predict([[p.kills,p.deaths,p.assists]])
-      print p.kills, p.deaths, p.assists, ' - ', onePrediction[0]
-      if(onePrediction[0]):
-        countWins += 1
-
-    # If more than 2 of the decision trees predict win
-    if (countWins > 2):
-      print 'Predict win'
-    else:
-      print 'Predict lose'
 
 if __name__ == '__main__':
   players = []  # Contains list of Player classes from csv
