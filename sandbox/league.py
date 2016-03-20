@@ -3,37 +3,68 @@
 import sys
 import numpy as np
 from sklearn import tree
+from sklearn.metrics import accuracy_score
 
-# Contains the available data for one match when testing a classifier.
-# Each team (Won / Lost) has 5 players
+# Contains data about the match and each of the players in the game.
 class Match():
-  def __init__(self, matchId, matchDuration, queueType, mapId):
+  def __init__(self, matchId, matchDuration = None, queueType = None, mapId = None):
     # Map data
     self.matchId = matchId
-    self.matchDuration = matchDuration
-    self.queueType = queueType
-    self.mapId = mapId
+    self.matchDuration = matchDuration  # length of match in seconds
+    self.queueType = queueType          # type of queue (e.g. ranked solo, normals, etc.)
+    self.mapId = mapId                  # type of map
 
     # Player data - each list contains 5 Player classes
     self.team1 = []
+    self.team1Won = None
+
     self.team2 = []
+    self.team2Won = None
 
   def __str__(self):
-    s = 'Match ' + str(self.matchId) + ' lasted for '
-    s += str(int(self.matchDuration / 60)) + 'm ' + str(int(self.matchDuration % 60)) + 's'
+    s = 'Match ' + str(self.matchId)
     return s
 
-# Contains data player data for a single game
+# Contains data about a specific player
 class Player():
-  def __init__(self, participantId,	championId,	spell1Id,	spell2Id,	highestAchievedSeasonTier,
-               winner, kills, deaths, assists, totalDamageDealtToChampions, wardsPlaced,
-               wardsKilled, inhibitorKills, towerKills, summonerId, matchHistoryUrl):
-    self.participantId = participantId  # player number (= any int value from 1 to 10)
+  def __init__(self, summonerId, championId):
+    # Current game stats
+    self.summonerId = summonerId
     self.championId = championId
-    self.spell1Id = spell1Id            # first summoner spell id
-    self.spell2Id = spell2Id            # second summoner spell id
 
-    rankInt = 0
+    self.participantId = None       # player number (= any int value from 1 to 10)
+    self.spell1Id = None            # first summoner spell id
+    self.spell2Id = None            # second summoner spell id
+
+    # One completed game
+    self.won = None
+    self.kills = None
+    self.deaths = None
+    self.assists = None
+    self.totalDamageDealtToChampions = None
+    self.wardsPlaced = None
+    self.wardsKilled = None
+    self.inhibitorKills = None
+    self.towerKills = None
+    self.matchHistoryUrl = None
+
+    # Champ history
+    self.kda = None
+    self.winrate = None
+    self.mlvl = None
+
+    # Player history
+    self.highestAchievedSeasonTier = None  # Highest rank achieved
+
+  # Add stats for the player from a completed game
+  def addTestingGameData(self, participantId,	spell1Id,	spell2Id, highestAchievedSeasonTier, won,
+                         kills, deaths, assists, totalDamageDealtToChampions, wardsPlaced,
+                         wardsKilled, inhibitorKills, towerKills, matchHistoryUrl):
+    self.participantId = participantId
+    self.spell1Id = spell1Id
+    self.spell2Id = spell2Id
+
+    rankInt = None  # Default is None which means unknown rank
     if (highestAchievedSeasonTier == 'UNRANKED'):
       rankInt = 0
     elif (highestAchievedSeasonTier == 'BRONZE'):
@@ -50,13 +81,9 @@ class Player():
       rankInt = 6
     elif (highestAchievedSeasonTier == 'CHALLENGER'):
       rankInt = 7
-    else:
-      print 'ERROR: highestAchievedSeasontTier has an invalid value of: ',
-      print str(highestAchievedSeasonTier)
-      sys.exit()
-    self.highestAchievedSeasonTier = rankInt  # Highest rank achieved (converted to int value)
+    self.highestAchievedSeasonTier = rankInt
 
-    self.winner = winner    # true if the player won this game
+    self.won = won
     self.kills = kills
     self.deaths = deaths
     self.assists = assists
@@ -65,34 +92,34 @@ class Player():
     self.wardsKilled = wardsKilled
     self.inhibitorKills = inhibitorKills
     self.towerKills = towerKills
-    self.summonerId = summonerId
     self.matchHistoryUrl = matchHistoryUrl
 
-  @classmethod
-  def tmpConstructor(self, kills, deaths, assists):
-    return Player(0,0,0,0,'UNRANKED',0,kills, deaths, assists, 0,0,0,0,0,0,0)
+  # Add stats based on the player's history
+  def addTrainingGameData(self, kda, winrate, mlvl):
+    self.kda = kda
+    self.winrate = winrate
+    self.mlvl = mlvl
 
   def __str__(self):
     s = 'Summoner ' + str(self.summonerId)
     s += ' played champion ' + str(self.championId)
-    s += ' with a score of ' + str(self.kills) + '/' + str(self.deaths) + '/' + str(self.assists)
     return s
 
 
-# Puts the data from test.csv into the players list and matches list
-def getDataFromCSV(players, matches):
+# Takes the data from test.csv and converts it into a list of matches
+def getCurrentGameDataFromCSV(matches):
   print 'Reading data from test.csv'
 
   # mydata = np.recfromcsv('test.csv', delimiter=',');
   mydata = np.recfromcsv('test.csv', delimiter=',', filling_values=np.nan, case_sensitive=True,
                          deletechars='', replace_space=' ')
-
-  pid = 'participantId'
+  sumid = 'summonerId'
   cid = 'championId'
+  pid = 'participantId'
   sid1 = 'spell1Id'
   sid2 = 'spell2Id'
   rank = 'highestAchievedSeasonTier'
-  win = 'winner'
+  won = 'winner'
   kills = 'kills'
   deaths = 'deaths'
   assists = 'assists'
@@ -101,7 +128,6 @@ def getDataFromCSV(players, matches):
   wk = 'wardsKilled'
   ik = 'inhibitorKills'
   tk = 'towerKills'
-  sumid = 'summonerId'
   url = 'matchHistoryUri'
 
   for oneGame in mydata:
@@ -109,21 +135,64 @@ def getDataFromCSV(players, matches):
 
     # Add all player data to players list (training data)
     for i in range(1, 11):
-      p = Player(oneGame[pid + str(i)], oneGame[cid + str(i)], oneGame[sid1 + str(i)],
-                 oneGame[sid2 + str(i)], oneGame[rank + str(i)], oneGame[win + str(i)],
-                 oneGame[kills + str(i)], oneGame[deaths + str(i)],
-                 oneGame[assists + str(i)], oneGame[dmg + str(i)], oneGame[wp + str(i)],
-                 oneGame[wk + str(i)], oneGame[ik + str(i)], oneGame[tk + str(i)],
-                 oneGame[sumid + str(i)], oneGame[url + str(i)])
+      p = Player(oneGame[sumid + str(i)], oneGame[cid + str(i)])
+      p.addTestingGameData(oneGame[pid + str(i)], oneGame[sid1 + str(i)], oneGame[sid2 + str(i)],
+                           oneGame[rank + str(i)], oneGame[won + str(i)], oneGame[kills + str(i)],
+                           oneGame[deaths + str(i)], oneGame[assists + str(i)],
+                           oneGame[dmg + str(i)], oneGame[wp + str(i)], oneGame[wk + str(i)],
+                           oneGame[ik + str(i)], oneGame[tk + str(i)], oneGame[url + str(i)])
 
-      players.append(p)
-
-      if (p.winner):
+      if (i <= 5):
         m.team1.append(p)
       else:
         m.team2.append(p)
 
-    matches.append(m)
+    m.team1Won = m.team1[0].won
+    m.team2Won = m.team2[0].won
+    assert m.team1Won != m.team2Won, str('Both team 1 won and team 2 won for match ', m.matchId)
+    matches[m.matchId] = m
+
+  print 'Finished parsing data from test.csv'
+
+
+# Takes the data from ChampionInfo.csv and converts it into a list of matches
+def getDataFromChampionInfoCSV(matches):
+  print 'Reading data from ChampionInfo.csv'
+
+  mydata = np.recfromcsv('ChampionInfo.csv', delimiter=',', filling_values=np.nan, case_sensitive=True,
+                         deletechars='', replace_space=' ')
+  
+  sumid = 'summonerId'
+  cid = 'championId'
+  kda = 'kda'
+  winrate = 'winrate'
+  mlvl = 'masteryLevel'
+
+  m = None  # Current match
+  currParticipant = 10
+
+  # Add all player data for each match
+  # First 5 players are team 1, next 5 players are team 2
+  for onePlayer in mydata:
+    if (currParticipant == 10):
+      currParticipant = 0
+
+      if (m is not None):
+        matches.append(m)
+
+      m = Match(onePlayer['matchId'])
+
+    p = Player(onePlayer[sumid], onePlayer[cid])
+    p.addTrainingGameData(onePlayer[kda], onePlayer[winrate], onePlayer[mlvl])
+
+    if (currParticipant < 5):
+      m.team1.append(p)
+    else:
+      m.team2.append(p)
+
+    currParticipant += 1
+
+  print 'Finished parsing data from ChampionInfo.csv'
 
 # Add training data
 def addDataToClf(data, result, players):
@@ -135,64 +204,73 @@ def addDataToClf(data, result, players):
 def splitList(l, n):
   return [l[x : x + n] for x in xrange(0, len(l), n)]
 
-# Uses random forests (5 simple decision trees - 1 for each player)
-def DecisionTreeClassifer1(players, matches):
+# Add training data
+def addDataToClf1(data, results, players, win):
+  data.append(calculateAttributes(players))
+  results.append(win)
+
+# Returns a list of data used in classifier
+def calculateAttributes(players):
+  avgKDA = 0.0
+  avgWinrate = 0.0
+  avgMasteryLvl = 0.0
+
+  for p in players:
+    avgKDA += p.kda
+    avgWinrate += p.winrate
+    avgMasteryLvl += p.mlvl
+
+  avgKDA /= 5.0
+  avgWinrate /= 5.0
+  avgMasteryLvl /= 5.0
+
+  return [avgKDA, avgWinrate, avgMasteryLvl]
+
+# Uses a decision tree based on KDA, Win rate, Mastery points
+def DecisionTreeClassifer1(testingMatches, trainingMatches):
   data = []     # Contains data we are making decisions on
-  result = []   # True if team won and false if team lost
+  results = []   # True if team won and false if team lost
 
-  matches = splitList(matches, 200) # split matches into lists of size 200
+  trainingMatches = splitList(trainingMatches, 100) # split matches into 9 lists of size 1000
 
-  # Currently only uses first 200 matches as training data
-  for m in matches[0]:
-    addDataToClf(data, result, m.team1)
-    addDataToClf(data, result, m.team2)
+  # TODO: Cross validation - use each set as training/testing
+  # Currently only using first set as training and rest as testing
+  trainingSet = trainingMatches[0]
+  testingSet = trainingMatches[1:]
+
+  for i in range(0, len(trainingSet)):
+    m = trainingSet[i]
+
+    # Looks up result from testingMatches
+    addDataToClf1(data, results, m.team1, testingMatches[m.matchId].team1Won)
+    addDataToClf1(data, results, m.team2, testingMatches[m.matchId].team2Won)
 
   clf = tree.DecisionTreeClassifier()
-  clf = clf.fit(data, result)
+  clf = clf.fit(data, results)
 
-  correct = 0
-  numCases = 0
-  for m in matches[1]:
-    teams = [m.team1, m.team2]
-    for t in teams:
-      numCases += 1
-      countWins = 0
-      for p in t:
-        onePrediction = clf.predict([[p.kills,p.deaths,p.assists]])
-        # print p.kills, p.deaths, p.assists, ' - ', onePrediction[0]
-        if(onePrediction[0]):
-          countWins += 1
+  predictedResults = []
 
-      # If more than 2 of the decision trees predict win
-      if (countWins > 2):
-        if (t[0].winner):
-          # print 'Predict win and team won'
-          correct += 1
-        else:
-          # print 'Predict win and team lost'
-          pass
-      else:
-        if (t[0].winner):
-          # print 'Predict lose and team win'
-          pass
-        else:
-          # print 'Predict lose and team lost'
-          correct += 1
+  for test in testingSet:
+    for m in test:
+      teams = [m.team1, m.team2]
 
-  print 'Random forest accuracy: ', (100.0 * correct / numCases), '%'
+      for t in teams:
+        prediction = clf.predict([calculateAttributes(t)])
+        predictedResults.append(prediction)
 
+  trueResults = []
+  for test in testingSet:
+    for m in test:
+      trueResults.append(testingMatches[m.matchId].team1Won)
+      trueResults.append(testingMatches[m.matchId].team2Won)
+
+  print accuracy_score(trueResults, predictedResults)
 
 if __name__ == '__main__':
-  players = []  # Contains list of Player classes from csv
-  matches = []  # Contains list of Match classes from csv
-  getDataFromCSV(players, matches)
+  testingMatches = {}  # Contains dictionary of matches from test.csv with results
+  trainingMatches = [] # Contains list of matches from ChampionInfo.csv were result is unknown
 
-  print 'Printing 4 players'
-  for i in range (0, 4):
-    print players[i]
+  getCurrentGameDataFromCSV(testingMatches)
+  getDataFromChampionInfoCSV(trainingMatches)
 
-  print 'Printing 2 matches'
-  for i in range (0, 2):
-    print matches[i]
-
-  DecisionTreeClassifer1(players, matches)
+  DecisionTreeClassifer1(testingMatches, trainingMatches)
