@@ -106,12 +106,12 @@ class Player():
     return s
 
 
-# Takes the data from test.csv and converts it into a list of matches
+# Takes the data from matches.csv and converts it into a list of matches
 def getCurrentGameDataFromCSV(matches):
-  print 'Reading data from test.csv'
+  print 'Reading data from matches.csv'
 
-  # mydata = np.recfromcsv('test.csv', delimiter=',');
-  mydata = np.recfromcsv('test.csv', delimiter=',', filling_values=np.nan, case_sensitive=True,
+  # mydata = np.recfromcsv('matches.csv', delimiter=',');
+  mydata = np.recfromcsv('matches.csv', delimiter=',', filling_values=np.nan, case_sensitive=True,
                          deletechars='', replace_space=' ')
   sumid = 'summonerId'
   cid = 'championId'
@@ -152,14 +152,14 @@ def getCurrentGameDataFromCSV(matches):
     assert m.team1Won != m.team2Won, str('Both team 1 won and team 2 won for match ', m.matchId)
     matches[m.matchId] = m
 
-  print 'Finished parsing data from test.csv'
+  print 'Finished parsing data from matches.csv'
 
 
-# Takes the data from ChampionInfo.csv and converts it into a list of matches
-def getDataFromChampionInfoCSV(matches):
-  print 'Reading data from ChampionInfo.csv'
+# Takes the data from ParticipantInfo.csv and converts it into a list of matches
+def getDataFromParticipantInfoCSV(matches):
+  print 'Reading data from ParticipantInfo.csv'
 
-  mydata = np.recfromcsv('ChampionInfo.csv', delimiter=',', filling_values=np.nan, case_sensitive=True,
+  mydata = np.recfromcsv('ParticipantInfo.csv', delimiter=',', filling_values=np.nan, case_sensitive=True,
                          deletechars='', replace_space=' ')
   
   sumid = 'summonerId'
@@ -192,7 +192,7 @@ def getDataFromChampionInfoCSV(matches):
 
     currParticipant += 1
 
-  print 'Finished parsing data from ChampionInfo.csv'
+  print 'Finished parsing data from ParticipantInfo.csv'
 
 # Add training data
 def addDataToClf(data, result, players):
@@ -267,10 +267,10 @@ def DecisionTreeClassifer1(testingMatches, trainingMatches):
   print accuracy_score(trueResults, predictedResults)
 
 if __name__ == '__main__':
-  testingMatches = {}  # Contains dictionary of matches from test.csv with results
-  trainingMatches = [] # Contains list of matches from ChampionInfo.csv were result is unknown
+  testingMatches = {}  # Contains dictionary of matches from matches.csv with results
+  trainingMatches = [] # Contains list of matches from ParticipantInfo.csv were result is unknown
 
   getCurrentGameDataFromCSV(testingMatches)
-  getDataFromChampionInfoCSV(trainingMatches)
+  getDataFromParticipantInfoCSV(trainingMatches)
 
   DecisionTreeClassifer1(testingMatches, trainingMatches)

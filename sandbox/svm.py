@@ -5,26 +5,29 @@ import numpy as np
 from sklearn import svm
 from sklearn.metrics import accuracy_score
 
-
 def formatData(data, participantInfo):
     X = [] #average KDA, average winrate, average masteryLvl
     Y = [] #winner?
-	
+
+    counter = 0
     for tu in data:
         matchId = tu[0]
         win1 = tu[9]
 
-        #This is really slow, I dont have to search the whole csv
-        participants = [p for p in participantInfo if p[0] == matchId]
+        participants = []
+        participants.append(participantInfo[(counter*10)])
+        participants.append(participantInfo[(counter*10) + 1])
+        participants.append(participantInfo[(counter*10) + 2])
+        participants.append(participantInfo[(counter*10) + 3])
+        participants.append(participantInfo[(counter*10) + 4])
 
         #Team 1
-        kda1, winrate1, masteryLvl1 = getAverages(participants[0:5])
-    
-        #Team 2
-		#kda2, winrate2, masteryLvl2 = getAverages(participants[5:10])
+        kda1, winrate1, masteryLvl1 = getAverages(participants)
     
         X.append((kda1, winrate1, masteryLvl1))
         Y.append(win1)
+        
+        counter = counter + 1
 			
     return X,Y
 
@@ -43,12 +46,15 @@ def main():
     dataset = np.recfromcsv("matches.csv", delimiter=",")
     participantInfo = np.recfromcsv("participantInfo.csv", delimiter=",")
     
-    XTrain, YTrain = formatData(dataset[0:700], participantInfo)
+    trainDataEnd = 700
+    testDataEnd = 900
+    
+    XTrain, YTrain = formatData(dataset[0:trainDataEnd], participantInfo)
     
     clf = svm.SVC()
     clf.fit(XTrain, YTrain)
         
-    XTest, YTest = formatData(dataset[700:900], participantInfo)
+    XTest, YTest = formatData(dataset[trainDataEnd:testDataEnd], participantInfo[trainDataEnd*10:])
     
     YPredicted = []
     for x in XTest:
