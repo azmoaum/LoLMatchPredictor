@@ -4,6 +4,7 @@ import sys
 import numpy as np
 from sklearn import tree
 from sklearn.metrics import accuracy_score
+from sklearn import cross_validation
 
 # Contains data about the match and each of the players in the game.
 class Match():
@@ -209,6 +210,14 @@ def addDataToClf1(data, results, players, win):
   data.append(calculateAttributes(players))
   results.append(win)
 
+
+# Add training data - using both teams
+def addDataToClf2(data, results, team1, team2, win):
+  t1 = calculateAttributes(team1)
+  t2 = calculateAttributes(team2)
+  data.append([t1[0] - t2[0], t1[1] - t2[1], t1[2] - t2[2]])
+  results.append(win)
+
 # Returns a list of data used in classifier
 def calculateAttributes(players):
   avgKDA = 0.0
@@ -228,13 +237,38 @@ def calculateAttributes(players):
 
 # Uses a decision tree based on KDA, Win rate, Mastery points
 def DecisionTreeClassifer1(testingMatches, trainingMatches):
-  data = []     # Contains data we are making decisions on
+  data = []     # Contains data we are making decisions on - method 1
   results = []   # True if team won and false if team lost
 
+  for i in range(0, len(trainingMatches)):
+    m = trainingMatches[i]
+
+    # Looks up result from testingMatches
+    addDataToClf1(data, results, m.team1, testingMatches[m.matchId].team1Won)
+    addDataToClf1(data, results, m.team2, testingMatches[m.matchId].team2Won)
+
+  clf = tree.DecisionTreeClassifier()
+  clf = clf.fit(data, results)
+
+  # Cross validation - use each set as training/testing
+  scores = cross_validation.cross_val_score(clf, data, results, cv=10)
+  print 'accuracy with 10-fold cv:'
+  print 'method 1 (looking at single team):', scores.mean()
+
+  for i in range(0, len(trainingMatches)):
+    m = trainingMatches[i]
+
+    # Looks up result from testingMatches
+    addDataToClf2(data, results, m.team1, m.team2, testingMatches[m.matchId].team1Won)
+    addDataToClf2(data, results, m.team2, m.team1, testingMatches[m.matchId].team2Won)
+
+  scores = cross_validation.cross_val_score(clf, data, results, cv=10)
+  print 'method 1 (looking at both teams):', scores.mean()
+
+  '''
   trainingMatches = splitList(trainingMatches, 100) # split matches into 9 lists of size 1000
 
-  # TODO: Cross validation - use each set as training/testing
-  # Currently only using first set as training and rest as testing
+  # Only using first set as training and rest as testing
   trainingSet = trainingMatches[0]
   testingSet = trainingMatches[1:]
 
@@ -245,6 +279,7 @@ def DecisionTreeClassifer1(testingMatches, trainingMatches):
     addDataToClf1(data, results, m.team1, testingMatches[m.matchId].team1Won)
     addDataToClf1(data, results, m.team2, testingMatches[m.matchId].team2Won)
 
+  print data[0]
   clf = tree.DecisionTreeClassifier()
   clf = clf.fit(data, results)
 
@@ -263,8 +298,8 @@ def DecisionTreeClassifer1(testingMatches, trainingMatches):
     for m in test:
       trueResults.append(testingMatches[m.matchId].team1Won)
       trueResults.append(testingMatches[m.matchId].team2Won)
-
-  print accuracy_score(trueResults, predictedResults)
+  print 'accuracy: ', accuracy_score(trueResults, predictedResults)
+  '''
 
 if __name__ == '__main__':
   testingMatches = {}  # Contains dictionary of matches from matches.csv with results
